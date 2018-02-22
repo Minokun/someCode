@@ -1,104 +1,158 @@
-# coding=utf-8
-import random
 import numpy as np
+from personal.test.py3env.MinistData import *
+from datetime import datetime
+
+# 全连接层实现类
+class FullConnectedLayer():
+    def __init__(self, input_size, output_size, activator):
+        '''
+        构造函数
+        input_size: 本层输入向量的纬度
+        output_size: 本层输出向量的纬度
+        activator: 激活函数
+        '''
+
+        self.input_size = input_size
+        self.output_size = output_size
+        self.activator = activator
+        # 权重数组W
+        self.W = np.random.uniform(-0.1, 0.1, (output_size, input_size))
+
+        # 偏置项b
+        self.b = np.zeros((output_size, 1))
+
+        # 输出项
+        self.output = np.zeros((output_size, 1))
+
+    def forward(self, input_array):
+        '''
+        前向计算
+        input_array: 输入向量，纬度必须等于input_size
+        '''
+        self.input = input_array
+        self.outpu = self.activator.forward(
+            np.dot(self.W, input_array) + self.b)
+
+    def backward(self, delta_array):
+        '''
+        反向计算W和B的梯度
+        delta_array: 从上一层传递过来的误差项
+        '''
+        delta = self.activator.backward(self.input) * np.dot(self.W.T, delta_array)
+        self.W_grad = np.dot(delta, self.W.T)
+        self.b_grad = delta
+
+    def update(self, learning_rate):
+        '''
+        梯度下降算法更新权重
+        '''
+        self.W += learning_rate * self.W_grad
+        self.b += learning_rate * self.b_grad
 
 
-class Network(object):
-    def __init__(self, sizes):
-        # 网络层数
-        self.num_layers = len(sizes)
-        # 网络每层神经元个数
-        self.sizes = sizes
-        # 初始化每层的偏置
-        self.biases = [np.random.randn(y, 1) for y in sizes[1:]]
-        # 初始化每层的权重
-        self.weights = [np.random.randn(y, x)
-                        for x, y in zip(sizes[:-1], sizes[1:])]
+# 激活函数
+class SigmoidActivator():
+    def forward(self, weighted_input):
+        return 1.0 / (1.0 + np.exp(-weighted_input))
 
-    # 梯度下降
-    def GD(self, training_data, epochs, eta):
-        # 开始训练 循环每一个epochs
-        for j in xrange(epochs):
-            # 洗牌 打乱训练数据
-            random.shuffle(training_data)
-
-            # 保存每层偏倒
-            nabla_b = [np.zeros(b.shape) for b in self.biases]
-            nabla_w = [np.zeros(w.shape) for w in self.weights]
-
-            # 训练每一个数据
-            for x, y in training_data:
-                delta_nable_b, delta_nabla_w = self.update(x, y)
-
-                # 保存一次训练网络中每层的偏倒
-                nabla_b = [nb + dnb for nb, dnb in zip(nabla_b, delta_nable_b)]
-                nabla_w = [nw + dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
-
-            # 更新权重和偏置 Wn+1 = wn - eta * nw
-            self.weights = [w - (eta) * nw
-                            for w, nw in zip(self.weights, nabla_w)]
-            self.biases = [b - (eta) * nb
-                           for b, nb in zip(self.biases, nabla_b)]
-
-            print "Epoch {0} complete".format(j)
-
-    # 前向传播
-    def update(self, x, y):
-        # 保存每层偏倒
-        nabla_b = [np.zeros(b.shape) for b in self.biases]
-        nabla_w = [np.zeros(w.shape) for w in self.weights]
-
-        activation = x
-
-        # 保存每一层的激励值a=sigmoid(z)
-        activations = [x]
-
-        # 保存每一层的z=wx+b
-        zs = []
-        # 前向传播
-        for b, w in zip(self.biases, self.weights):
-            # 计算每层的z
-            z = np.dot(w, activation) + b
-
-            # 保存每层的z
-            zs.append(z)
-
-            # 计算每层的a
-            activation = sigmoid(z)
-
-            # 保存每一层的a
-            activations.append(activation)
-
-        # 反向更新了
-        # 计算最后一层的误差
-        delta = self.cost_derivative(activations[-1], y) * sigmoid_prime(zs[-1])
-
-        # 最后一层权重和偏置的倒数
-        nabla_b[-1] = delta
-        nabla_w[-1] = np.dot(delta, activations[-2].transpose())
-
-        # 倒数第二层一直到第一层 权重和偏置的倒数
-        for l in range(2, self.num_layers):
-            z = zs[-l]
-
-            sp = sigmoid_prime(z)
-
-            # 当前层的误差
-            delta = np.dot(self.weights[-l+1].transpose(), delta) * sp
-
-            # 当前层偏置和权重的倒数
-            nabla_b[-l] = delta
-            nabla_w[-l] = np.dot(delta, activations[-l - 1].transpose())
-
-        return (nabla_b, nabla_w)
-
-    def cost_derivative(self, output_activation, y):
-        return (output_activation - y)
-
-def sigmoid(z):
-    return 1.0 / (1.0 + np.exp(-z))
+    def backward(self, output):
+        return output * (1 - output)
 
 
-def sigmoid_prime(z):
-    return sigmoid(z) * (1 - sigmoid(z))
+# 神经网络类
+class Network():
+    def __init__(self, layers):
+        '''
+        构造函数
+        '''
+        self.layers = []
+        for i in range(len(layers) - 1):
+            self.layers.append(
+                FullConnectedLayer(
+                    layers[i], layers[i + 1],
+                    SigmoidActivator()
+                )
+            )
 
+    def predict(self, sample):
+        '''
+        使用神经网络实现预测
+        sample: 输入样本
+        '''
+        output = sample
+        for layer in self.layers:
+            layer.forward(output)
+            output = layer.output
+        return output
+
+    def train(self, labels, data_set, rate, epoch):
+        '''
+        训练函数
+        labels: 样本标签
+        data_set: 输入样本
+        rate: 学习速率
+        epoch: 训练轮数
+        '''
+        for i in range(epoch):
+            for d in range(len(data_set)):
+                self.train_one_sample(labels[d], data_set[d], rate)
+
+    def train_one_sample(self, label, sample, rate):
+        self.predict(sample)
+        self.calc_gradient(label)
+        self.update_weight(rate)
+
+    def calc_gradient(self, label):
+        delta = self.layers[-1].activator.backward(self.layers[-1].output
+                                                   ) * (label - self.layers[-1].output)
+        for layer in self.layers[::-1]:
+            layer.backward(delta)
+            delta = layer.delta
+        return delta
+
+    def update_weight(self, rate):
+        for layer in self.layers:
+            layer.update(rate)
+
+
+def get_result(vec):
+    max_value_index = 0
+    max_value = 0
+    for i in range(len(vec)):
+        if vec[i] > max_value:
+            max_value = vec[i]
+            max_value_index = i
+    return max_value_index
+
+
+def evaluate(network, test_data_set, test_labels):
+    error = 0
+    total = len(test_data_set)
+    for i in range(total):
+        label = get_result(test_labels[i])
+        predict = get_result(network.predict(test_data_set[i]))
+        if label != predict:
+            error += 1
+    return float(error) / float(total)
+
+
+def train_and_evaluate():
+    last_error_ratio = 1.0
+    epoch = 0
+    train_data_set, train_labels = get_training_data_set()
+    test_data_set, test_labels = get_test_data_set()
+    network = Network([784, 300, 10])
+    while True:
+        epoch += 1
+        network.train(train_labels, train_data_set, 0.3, 1)
+        print('%s epoch %d finished' % (datetime.now(), epoch))
+        if epoch % 10 == 0:
+            error_ratio = evaluate(network, test_data_set, test_labels)
+            print('%s after epoch %d, error ratio is %f' % (datetime.now(), epoch, error_ratio))
+            if error_ratio > last_error_ratio:
+                break
+            else:
+                last_error_ratio = error_ratio
+
+
+train_and_evaluate()
