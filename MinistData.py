@@ -105,3 +105,6 @@ def get_test_data_set():
     image_loader = ImageLoader('./dataset/t10k-images-idx3-ubyte', 10000)
     label_loader = LabelLoader('./dataset/t10k-labels-idx1-ubyte', 10000)
     return image_loader.load(), label_loader.load()
+
+train_data_set, train_labels = get_training_data_set()
+test_data_set, test_labels = get_test_data_set()
