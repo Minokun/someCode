@@ -44,8 +44,7 @@ class Network():
                            for k in index_num]
 
             # 训练mini_batch
-            for mini_batch, mini_batchs_label in zip(mini_batchs, mini_batchs_labels):
-                self.update_mini_batch(mini_batch, mini_batchs_label, eta)
+            self.update_mini_batch(mini_batchs, mini_batchs_labels, eta)
 
             if test_data:
                 print("Epoch {0}: {1} / {2}".format(
@@ -54,13 +53,13 @@ class Network():
             print("Epoch {0} complte".format(j))
 
     # 更新mini_batch
-    def update_mini_batch(self, mini_batch, mini_batchs_label, eta):
+    def update_mini_batch(self, mini_batchs, mini_batchs_labels, eta):
         # 保存每层的偏导
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
 
         # 训练每一个mini_batch
-        for x, y in zip(mini_batch, mini_batchs_label):
+        for x, y in zip(mini_batchs, mini_batchs_labels):
             delta_nabla_b, delta_nabla_w = self.update(x, y)
 
             # 保存一次训练网络中每层的偏导
@@ -68,9 +67,9 @@ class Network():
             nabla_w = [nw + dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
 
         # 更新权重和偏执 Wn+1 = wn - eta * nw
-        self.weights = [w - (eta / len(mini_batch)) * nw
+        self.weights = [w - (eta / len(mini_batchs)) * nw
                         for w, nw in zip(self.weights, nabla_w)]
-        self.biases = [b - (eta / len(mini_batch)) * nb
+        self.biases = [b - (eta / len(mini_batchs)) * nb
                        for b, nb in zip(self.biases, nabla_b)]
 
     # 前向传播
@@ -89,7 +88,7 @@ class Network():
         # 前向传播
         for b, w in zip(self.biases, self.weights):
             # 计算每层的z
-            z = np.dot(w, activation) + b
+            z = np.array([np.dot(w, activation)]).T + b
 
             # 保存每层的z
             zs.append(z)
@@ -102,11 +101,14 @@ class Network():
 
         # 反向更新
         # 计算最后一层的误差
-        delta = self.cost_dericative(activations[-1], y) * sigmoid_prime(zs[-1])
+        delta = self.cost_dericative(activations[-1], np.array(y).reshape((len(y),1))) * sigmoid_prime(zs[-1])
 
         # 最后一层权重和偏置的导数
         nabla_b[-1] = delta
         nabla_w[-1] = np.dot(delta, activations[-2].transpose())
+
+        nabla_b = np.array(nabla_b[-1])
+        nabla_w = np.array(nabla_w[-1])
 
         # 导数第二层一直到第一层 权重和偏执的导数
         for l in range(2, self.num_layers):
