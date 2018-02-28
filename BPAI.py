@@ -17,23 +17,18 @@ class Network():
         self.biases = [np.random.randn(y, 1) for y in sizes[1:]]
         self.weights = [np.random.randn(y, x) for x, y in zip(sizes[:-1], sizes[1:])]
 
-    def feedforward(self, a):
-        for b, w in zip(self.biases, self.weights):
-            a = sigmoid(np.dot(w, a) + b)
-
-        return a
-
     # 随机梯度下降
     def SGD(self, training_data, train_labels, epochs, mini_batch_size, eta, test_data=None, test_labels=None):
-        if test_data: n_test = len(test_data)
+
         # 训练数据总个数
         n = len(training_data)
 
         # 开始训练 循环每一个epochs
         for  j in range(epochs):
             # 洗牌打乱数据 获取1 - len(training_data)随机十分之一的数字
+            print('{0:*>10} Epochs process: {1}/{2} {3:*<10}'.format('*', j, epochs, '*'))
 
-            index_num = random.sample(range(n), int(n / 10))
+            index_num = random.sample(range(n), int(n / mini_batch_size))
             index_num.sort()
 
             # mini_batch
@@ -48,9 +43,8 @@ class Network():
 
             if test_data:
                 print("Epoch {0}: {1} / {2}".format(
-                    j, self.evaluate(test_data, test_labels), n_test
+                    j, self.evaluate(test_data, test_labels), len(test_data)
                 ))
-            print("Epoch {0} complte".format(j))
 
     # 更新mini_batch
     def update_mini_batch(self, mini_batchs, mini_batchs_labels, eta):
@@ -60,7 +54,7 @@ class Network():
 
         # 训练每一个mini_batch
         for x, y in zip(mini_batchs, mini_batchs_labels):
-            delta_nabla_b, delta_nabla_w = self.update(x, y)
+            delta_nabla_b, delta_nabla_w = self.update(np.array(x), np.array(y))
 
             # 保存一次训练网络中每层的偏导
             nabla_b = [nb + dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
@@ -78,7 +72,7 @@ class Network():
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
 
-        activation = x
+        activation = x.reshape((len(x), 1))
 
         # 保存每一层的激励值a=sigmoid(z)
         activations = [x]
@@ -88,7 +82,8 @@ class Network():
         # 前向传播
         for b, w in zip(self.biases, self.weights):
             # 计算每层的z
-            z = np.array([np.dot(w, activation)]).T + b
+            wa = np.dot(w, activation)
+            z = wa + b
 
             # 保存每层的z
             zs.append(z)
@@ -101,14 +96,11 @@ class Network():
 
         # 反向更新
         # 计算最后一层的误差
-        delta = self.cost_dericative(activations[-1], np.array(y).reshape((len(y),1))) * sigmoid_prime(zs[-1])
+        delta =(activations[-1] - np.array(y).reshape((len(y),1))) * sigmoid_prime(zs[-1])
 
         # 最后一层权重和偏置的导数
         nabla_b[-1] = delta
-        nabla_w[-1] = np.dot(delta, activations[-2].transpose())
-
-        nabla_b = np.array(nabla_b[-1])
-        nabla_w = np.array(nabla_w[-1])
+        nabla_w[-1] = np.multiply(delta, activations[-2].transpose())
 
         # 导数第二层一直到第一层 权重和偏执的导数
         for l in range(2, self.num_layers):
@@ -117,20 +109,23 @@ class Network():
             sp = sigmoid_prime(z)
 
             # 当前层的误差
-            delta = np.dot(self.weights[-l+1].transpose(), delta) * sp
+            delta = np.dot(self.weights[-l + 1].transpose(), delta) * sp
 
             # 当前层的偏置和权重的导数
             nabla_b[-l] = delta
-            nabla_w[-l] = np.dot(delta, activations[-l - 1].transpose())
+            nabla_w[-l] = np.multiply(delta, activations[-l - 1].transpose())
 
         return (nabla_b, nabla_w)
 
-    def evaluate(self, test_data, test_labels):
-        test_results = [(np.argmax(self.feedforward(x)), y) for (x, y) in zip(test_data, test_labels)]
-        return sum(int(x == y) for (x, y) in test_results)
+    def feedforward(self, a):
+        for b, w in zip(self.biases, self.weights):
+            a = sigmoid(np.dot(w, a) + b)
+        return a
 
-    def cost_dericative(self, output_activation, y):
-        return (output_activation - y)
+    # 注意 这里的784个输入参数是一行784列，得转为784行一列
+    def evaluate(self, test_data, test_labels):
+        test_results = [(np.argmax(self.feedforward(np.array(x).reshape((len(x)), 1))), np.argmax(y)) for (x, y) in zip(test_data, test_labels)]
+        return sum([int(x == y) for (x, y) in test_results])
 
 if __name__ == '__main__':
     from personal.test.py3env import MinistData
@@ -138,5 +133,5 @@ if __name__ == '__main__':
     train_data_set, train_labels = MinistData.get_training_data_set()
     test_data_set, test_labels = MinistData.get_test_data_set()
 
-    net = Network([784, 30, 10])
-    net.SGD(train_data_set, train_labels, 30, 10, 0.5, test_data=test_data_set, test_labels=test_labels)
+    net = Network([784, 300, 10])
+    net.SGD(train_data_set, train_labels, 300, 2, 0.05, test_data=test_data_set, test_labels=test_labels)
