@@ -1,5 +1,18 @@
 import random
 import numpy as np
+import h5py
+import pickle
+
+# 存储参数
+def saveToPickle(weight, biases):
+    with open('BPAI.pickle', 'wb') as f:
+        pickle.dump((weight, biases), f)
+
+# 读取参数
+def readPickle():
+    with open('BPAI.pickle', 'rb') as f:
+        res = pickle.load(f)
+    return res
 
 def sigmoid(z):
     return 1.0 / (1.0 + np.exp(-z))
@@ -8,17 +21,21 @@ def sigmoid_prime(z):
     return sigmoid(z) * (1 - sigmoid(z))
 
 class Network():
-    def __init__(self, sizes):
+    # type 1 不加载已训练好的参数 2 加载
+    def __init__(self, sizes, type=1):
         # 网络层熟
         self.num_layers = len(sizes)
         # 网络每层神经元个数
         self.sizes = sizes
         # 初始化每层的偏置和权重
-        self.biases = [np.random.randn(y, 1) for y in sizes[1:]]
-        self.weights = [np.random.randn(y, x) for x, y in zip(sizes[:-1], sizes[1:])]
+        if type == 1:
+            self.biases = [np.random.randn(y, 1)/y for y in sizes[1:]]
+            self.weights = [np.random.randn(y, x)/np.sqrt(x) for x, y in zip(sizes[:-1], sizes[1:])]
+        else:
+            self.weights, self.biases = readPickle()
 
     # 随机梯度下降
-    def SGD(self, training_data, train_labels, epochs, mini_batch_size, eta, test_data=None, test_labels=None):
+    def SGD(self, training_data, train_labels, epochs, mini_batch_size, eta, lmbda=0.0, test_data=None, test_labels=None):
 
         # 训练数据总个数
         n = len(training_data)
@@ -26,7 +43,7 @@ class Network():
         # 开始训练 循环每一个epochs
         for  j in range(epochs):
             # 洗牌打乱数据 获取1 - len(training_data)随机十分之一的数字
-            print('{0:*>10} Epochs process: {1}/{2} {3:*<10}'.format('*', j, epochs, '*'))
+            print('{0:*>10} Epochs process: {1}/{2} {3:*<10}'.format('*', j + 1, epochs, '*'))
 
             index_num = random.sample(range(n), int(n / mini_batch_size))
             index_num.sort()
@@ -39,15 +56,20 @@ class Network():
                            for k in index_num]
 
             # 训练mini_batch
-            self.update_mini_batch(mini_batchs, mini_batchs_labels, eta)
+            self.update_mini_batch(mini_batchs, mini_batchs_labels, eta, lmbda)
 
             if test_data:
                 print("Epoch {0}: {1} / {2}".format(
-                    j, self.evaluate(test_data, test_labels), len(test_data)
+                    j + 1, self.evaluate(test_data, test_labels), len(test_data)
                 ))
 
+        # 保存当前训练参数
+        saveToPickle(self.weights, self.biases)
+
     # 更新mini_batch
-    def update_mini_batch(self, mini_batchs, mini_batchs_labels, eta):
+    def update_mini_batch(self, mini_batchs, mini_batchs_labels, eta, lmbda):
+        # 训练集总数
+        n = len(mini_batchs)
         # 保存每层的偏导
         nabla_b = [np.zeros(b.shape) for b in self.biases]
         nabla_w = [np.zeros(w.shape) for w in self.weights]
@@ -61,7 +83,7 @@ class Network():
             nabla_w = [nw + dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
 
         # 更新权重和偏执 Wn+1 = wn - eta * nw
-        self.weights = [w - (eta / len(mini_batchs)) * nw
+        self.weights = [w * (1 - eta * (lmbda / n)) - (eta / len(mini_batchs)) * nw
                         for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b - (eta / len(mini_batchs)) * nb
                        for b, nb in zip(self.biases, nabla_b)]
@@ -133,5 +155,5 @@ if __name__ == '__main__':
     train_data_set, train_labels = MinistData.get_training_data_set()
     test_data_set, test_labels = MinistData.get_test_data_set()
 
-    net = Network([784, 300, 10])
-    net.SGD(train_data_set, train_labels, 300, 2, 0.05, test_data=test_data_set, test_labels=test_labels)
+    net = Network([784, 60, 10], 2)
+    net.SGD(train_data_set, train_labels, epochs = 100, mini_batch_size = 5, eta = 0.5, lmbda = 5.0, test_data=test_data_set, test_labels=test_labels)
